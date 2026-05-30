@@ -271,13 +271,20 @@ bot.on('message', async (ctx) => {
     const username = ctx.from.username ? `@${ctx.from.username}` : "нет username";
     const firstName = ctx.from.first_name || "";
 
-    bot.telegram.sendMessage(ADMIN_ID,
+bot.telegram.sendMessage(ADMIN_ID,
       `📩 Сообщение от пользователя!\n\n` +
       `👤 Имя: ${firstName}\n` +
       `🔗 Username: ${username}\n` +
       `🆔 ID: ${userId}\n\n` +
-      `💬 Сообщение:\n${msgText}\n\n` +
-      `Профиль: tg://user?id=${userId}`
+      `💬 Сообщение:\n${msgText}`,
+      {
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "💬 Написать пользователю", url: `https://t.me/${ctx.from.username || ''}` },
+            { text: "👤 Профиль", url: `tg://user?id=${userId}` }
+          ]]
+        }
+      }
     ).catch(() => {});
 
     return ctx.reply("✅ Сообщение отправлено менеджеру! Он скоро ответит.", mainMenu);
