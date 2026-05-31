@@ -1,7 +1,7 @@
 const { Telegraf, Markup } = require('telegraf');
 
 // ============================
-const TOKEN = "8899743634:AAHrYMRQmasuhNR7-hDvOBZ4m73NPZLrx3g";
+const TOKEN = "8468856811:AAF8bDieH_RfYwaBavXHSE2OXRiLCNtLOJE";
 const ADMIN_ID = 7950449116;
 const ADMIN_USERNAME = "fominya7";
 const TIMEZONE_OFFSET = 3; // UTC+3
