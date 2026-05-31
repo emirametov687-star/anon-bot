@@ -1,154 +1,123 @@
-// ===== ADMIN COMMANDS =====
+const { Telegraf } = require('telegraf');
+const db = require('./database');
 
-bot.command('unban', (ctx) => {
-  if (ctx.from.id !== ADMIN_ID) return ctx.reply("⛔️ Нет доступа.");
+const TOKEN = "8899743634:AAHrYMRQmasuhNR7-hDvOBZ4m73NPZLrx3g";
+const ADMIN_ID = 7950449116;
 
-  const args = ctx.message.text.split(' ');
-  if (!args[1]) return ctx.reply("Использование: /unban USER_ID");
+const bot = new Telegraf(TOKEN);
 
-  const unbanId = parseInt(args[1]);
-  blockedUsers.delete(unbanId);
+// ===================== STATE =====================
+let waitingUsers = [];
+let activeChats = {};
 
-  bot.telegram.sendMessage(unbanId, "✅ Ты разблокирован!").catch(() => {});
-  ctx.reply(`✅ Пользователь ${unbanId} разблокирован.`);
+// ===================== DB =====================
+const ensureUser = (id) => {
+  db.prepare(`INSERT OR IGNORE INTO users (id) VALUES (?)`).run(id);
+};
+
+const isBlocked = (id) => {
+  const u = db.prepare(`SELECT blocked FROM users WHERE id=?`).get(id);
+  return u?.blocked === 1;
+};
+
+const setBlocked = (id, val) => {
+  db.prepare(`UPDATE users SET blocked=? WHERE id=?`).run(val ? 1 : 0, id);
+};
+
+// ===================== START =====================
+bot.start((ctx) => {
+  const id = ctx.from.id;
+  ensureUser(id);
+
+  ctx.reply("🎭 Бот запущен\n\n/search — найти собеседника");
 });
 
-bot.command('givevip', (ctx) => {
-  if (ctx.from.id !== ADMIN_ID) return ctx.reply("⛔️ Нет доступа.");
+// ===================== SEARCH =====================
+bot.command('search', (ctx) => {
+  const id = ctx.from.id;
 
-  const args = ctx.message.text.split(' ');
-  if (!args[1] || !args[2]) {
-    return ctx.reply("Использование: /givevip USER_ID ЧАСЫ");
+  if (isBlocked(id)) return ctx.reply("🚫 Заблокирован");
+  ensureUser(id);
+
+  if (activeChats[id]) {
+    return ctx.reply("⚠️ Ты уже в чате");
   }
 
-  const targetId = parseInt(args[1]);
-  const hours = parseInt(args[2]);
+  if (waitingUsers.length > 0) {
+    const partner = waitingUsers.shift();
 
-  addVIPTime(targetId, hours);
+    activeChats[id] = partner;
+    activeChats[partner] = id;
 
-  bot.telegram.sendMessage(
-    targetId,
-    👑 Администратор выдал тебе ${hours} часов VIP!
-  ).catch(() => {});
-
-  ctx.reply(`✅ Выдано ${hours} часов VIP пользователю ${targetId}.`);
+    ctx.reply("✅ Собеседник найден");
+    bot.telegram.sendMessage(partner, "✅ Собеседник найден");
+  } else {
+    waitingUsers.push(id);
+    ctx.reply("🔍 Поиск собеседника...");
+  }
 });
 
-bot.command('reports', (ctx) => {
-  if (ctx.from.id !== ADMIN_ID) return ctx.reply("⛔️ Нет доступа.");
+// ===================== STOP =====================
+bot.command('stop', (ctx) => {
+  const id = ctx.from.id;
 
-  if (reports.length === 0) return ctx.reply("📭 Жалоб нет.");
+  const partner = activeChats[id];
 
-  const text = reports
-    .map((r, i) => `${i + 1}. От: ${r.from} на: ${r.on}\nТекст: ${r.text}`)
-    .join('\n\n');
+  if (partner) {
+    delete activeChats[id];
+    delete activeChats[partner];
 
-  ctx.reply(`🚫 Жалобы:\n\n${text}`);
+    bot.telegram.sendMessage(partner, "❌ Чат завершён");
+  }
+
+  ctx.reply("🛑 Чат остановлен");
 });
 
-
-// ===== MESSAGE HANDLER =====
-
+// ===================== MESSAGE =====================
 bot.on('message', async (ctx) => {
-  const userId = ctx.from.id;
+  const id = ctx.from.id;
 
-  if (isBlocked(userId)) return;
+  if (isBlocked(id)) return;
 
-  // Ждём выбор пола
-  if (waitingForGenderSetup[userId]) {
-    return ctx.reply("Пожалуйста, выбери свой пол 👇", genderSetupMenu);
-  }
+  const partner = activeChats[id];
+  if (!partner) return;
 
-  // ===== ЖАЛОБА =====
-  if (waitingForReport[userId]) {
-    delete waitingForReport[userId];
-
-    const partnerId = activeChats[userId];
-    const reportText = ctx.message.text || "Без текста";
-
-    reports.push({
-      from: userId,
-      on: partnerId || "неизвестен",
-      text: reportText
-    });
-
-    bot.telegram.sendMessage(
-      ADMIN_ID,
-      🚫 Жалоба!\nОт: ${userId} (@${ctx.from.username || 'нет'})\nНа: ${partnerId || 'неизвестен'}\nТекст: ${reportText}\nЗабанить: /ban ${partnerId || ''}
-    ).catch(() => {});
-
-    return ctx.reply("✅ Жалоба отправлена. Спасибо!", chatMenu);
-  }
-
-  // ===== МЕНЕДЖЕР =====
-  if (waitingForManager[userId]) {
-    delete waitingForManager[userId];
-
-    const msgText = ctx.message.text || "Без текста";
-    const username = ctx.from.username ? @${ctx.from.username} : "нет username";
-    const firstName = ctx.from.first_name || "Без имени";
-
-    await bot.telegram.sendMessage(
-      ADMIN_ID,
-      📩 Сообщение!\n\n👤 ${firstName}\n🔗 ${username}\n🆔 ${userId}\n\n💬 ${msgText}
-    ).catch(() => {});
-
-    return ctx.reply(
-      ✅ Сообщение отправлено!\nМенеджер ответит: @${ADMIN_USERNAME},
-      mainMenu
-    );
-  }
-
-  // ===== ПЕРЕСЫЛКА ЧАТА =====
-  if (!activeChats[userId]) {
-    return ctx.reply("Нажми 🔍 чтобы найти собеседника!", mainMenu);
-  }
-
-  const partnerId = activeChats[userId];
   const msg = ctx.message;
 
   try {
     if (msg.text) {
-      await bot.telegram.sendMessage(partnerId, msg.text);
+      await bot.telegram.sendMessage(partner, msg.text);
     } else if (msg.photo) {
-      await bot.telegram.sendPhoto(
-        partnerId,
-        msg.photo[msg.photo.length - 1].file_id,
-        { caption: msg.caption || "" }
-      );
+      await bot.telegram.sendPhoto(partner, msg.photo.at(-1).file_id);
     } else if (msg.sticker) {
-      await bot.telegram.sendSticker(partnerId, msg.sticker.file_id);
+      await bot.telegram.sendSticker(partner, msg.sticker.file_id);
     } else if (msg.voice) {
-      await bot.telegram.sendVoice(partnerId, msg.voice.file_id);
+      await bot.telegram.sendVoice(partner, msg.voice.file_id);
     } else if (msg.video) {
-      await bot.telegram.sendVideo(
-        partnerId,
-        msg.video.file_id,
-        { caption: msg.caption || "" }
-      );
+      await bot.telegram.sendVideo(partner, msg.video.file_id);
     } else if (msg.document) {
-      await bot.telegram.sendDocument(
-        partnerId,
-        msg.document.file_id,
-        { caption: msg.caption || "" }
-      );
-    } else if (msg.audio) {
-      await bot.telegram.sendAudio(
-        partnerId,
-        msg.audio.file_id,
-        { caption: msg.caption || "" }
-      );
+      await bot.telegram.sendDocument(partner, msg.document.file_id);
     }
-
   } catch (e) {
-    delete activeChats[userId];
-    delete activeChats[partnerId];
-    ctx.reply("⚠️ Собеседник недоступен. Чат завершён.", mainMenu);
+    delete activeChats[id];
+    delete activeChats[partner];
   }
 });
 
-bot.
-launch();
-console.log("✅ Бот запущен!");
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+// ===================== ADMIN =====================
+bot.command('testdb', (ctx) => {
+  if (ctx.from.id !== ADMIN_ID) {
+    return ctx.reply("⛔ Нет доступа");
+  }
+
+  try {
+    const row = db.prepare('SELECT 1 as ok').get();
+    ctx.reply("DB OK: " + row.ok);
+  } catch (e) {
+    ctx.reply("DB ERROR: " + e.message);
+  }
+});
+
+// ===================== LAUNCH =====================
+bot.launch();
+console.log("✅ Bot started");
