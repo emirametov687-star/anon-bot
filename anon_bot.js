@@ -1,5 +1,4 @@
 const { Telegraf } = require('telegraf');
-const db = require('./database');
 
 const TOKEN = "8899743634:AAHrYMRQmasuhNR7-hDvOBZ4m73NPZLrx3g";
 const ADMIN_ID = 7950449116;
