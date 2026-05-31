@@ -358,6 +358,17 @@ bot.hears('🎁 Реферальная ссылка', async (ctx) => {
 
 // ===== КНОПКИ =====
 
+bot.command('testdb', (ctx) => {
+  if (ctx.from.id !== ADMIN_ID) {
+    return ctx.reply('⛔️ Нет доступа');
+  }
+  try {
+    const row = db.prepare('SELECT 1 as ok').get();
+    ctx.reply('DB работает: ' + row.ok);
+  } catch (e) {
+    ctx.reply('❌ Ошибка БД: ' + e.message);
+  }
+});
 bot.command('search', doSearch);
 bot.command('stop', doStop);
 bot.command('next', doNext);
