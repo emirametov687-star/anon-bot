@@ -3,7 +3,7 @@ const { Telegraf, Markup } = require('telegraf');
 // ============================
 const TOKEN = "8468856811:AAEcnj1O6Aw6uRiO1pzwObZcko07N4D50uI";
 const ADMIN_ID = 7950449116; // ЗАМЕНИ НА СВОЙ TELEGRAM ID
-const ADMIN_USERNAME = "@fominya7"; // ЗАМЕНИ НА СВОЙ USERNAME (без @)
+const ADMIN_USERNAME = "fominya7"; // ЗАМЕНИ НА СВОЙ USERNAME (без @)
 // ============================
 
 const bot = new Telegraf(TOKEN);
